@@ -8,6 +8,9 @@
 #include <ctype.h>
 #include <libgen.h>
 #include <sys/time.h>
+#include <chrono>
+#include <iostream>
+#include <fstream>
 
 #define READY_WAIT_TIME 15000
 #define MAX_STATION 256
@@ -329,11 +332,12 @@ long getMicrotime(){
 }
 
 int main(int argc, char* argv[]) {
-	FILE *recordFd;
+    std::ofstream recordFd;
     double freq = 79.0;
     int hcc = HCC_DEFAULT, snc = SNC_DEFAULT;
     int forced_mono = FORCED_MONO;
     int readyFlag = 0;
+    int n = 0;
     unsigned char radio[5] = { 0 };
     unsigned char stereo;
     unsigned char level_adc;
@@ -341,28 +345,52 @@ int main(int argc, char* argv[]) {
 
     prog_name = basename(argv[0]);
 
-	if((fd = fopen("timestamp.txt", "a")) == NULL) {
-		fprintf(stderr, "error opening file\n");
-		exit(1);
-	}
-
     if((fd = wiringPiI2CSetup(dID)) < 0) {
         fprintf(stderr, "error opening i2c channel\n");
         exit(1);
     }
 
     while(1){
-    	set_freq(freq, hcc, snc, forced_mono, 0, 0);
-		read(fd, radio, 5);
-        readyFlag = (radio[3] > 0x20)? 1:0;
-        if(readyFlag){ // ready flag on
-            currentTime = getMicrotime();
-            stereo = radio[2] & 0x80;
-            level_adc = radio[3] >> 4;
-            printf("%ld: %3.1f MHz %s \tSiganl Strength:%d/15\n", currentTime, freq, stereo? "stereo":"mono", level_adc);
-            fprintf(recordFd, "%ld: %3.1f MHz %s \tSiganl Strength:%d/15\n", currentTime, freq, stereo? "stereo": "mono", level_adc);
+	recordFd.open("timestamp.txt");
+	while(n < 100){
+	    set_freq(freq, hcc, snc, forced_mono, 0, 0);
+	    read(fd, radio, 5);
+            readyFlag = (radio[3] > 0x40)? 1:0;
+            if(readyFlag){ // ready flag on
+		std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
+		auto duration = currentTime.time_since_epoch();
+
+		typedef std::chrono::duration<int, std::ratio_multiply<std::chrono::hours::period, std::ratio<8>
+>::type> Days; /* UTC: +8:00 */
+
+		Days days = std::chrono::duration_cast<Days>(duration);
+    		duration -= days;
+		auto hours = std::chrono::duration_cast<std::chrono::hours>(duration);
+    		duration -= hours;
+		auto minutes = std::chrono::duration_cast<std::chrono::minutes>(duration);
+		duration -= minutes;
+		auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration);
+		duration -= seconds;
+		auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(duration);
+		duration -= milliseconds;
+		auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(duration);
+		duration -= microseconds;
+		auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
+
+                stereo = radio[2] & 0x80;
+                level_adc = radio[3] >> 4;
+                // printf("%ld: %3.1f MHz %s \tSiganl Strength:%d/15\n", currentTime, freq, stereo? "stereo":"mono", level_adc);
+		recordFd << hours.count() << ":" << minutes.count() << ":" << seconds.count() << ":"
+	<< milliseconds.count() << ":" << microseconds.count() << ":" << nanoseconds.count() << std::endl;
+                // fprintf(recordFd, "%ld: %3.1f MHz %s \tSiganl Strength:%d/15\n", currentTime, freq, stereo? "stereo": "mono", level_adc);
+	    }
+	    n++;
         }
+	std::cout << "reset" << std::endl;
+	recordFd.close();
+	n = 0;
     } 
 
-	return 0;
+    close(fd);
+    return 0;
 }
