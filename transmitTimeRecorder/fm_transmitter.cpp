@@ -96,7 +96,7 @@ int main(int argc, char** argv)
         transmitter = new Transmitter();
         std::cout << "Broadcasting at " << frequency << " MHz with "
             << bandwidth << " kHz bandwidth" << std::endl;
-		recordFd.open("timestamp.txt");
+		recordFd.open("timestamp.txt", std::ios_base::app);
 		std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
 		auto duration = currentTime.time_since_epoch();
 
