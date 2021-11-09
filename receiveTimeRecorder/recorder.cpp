@@ -351,44 +351,42 @@ int main(int argc, char* argv[]) {
     }
 
     while(1){
-	recordFd.open("timestamp.txt");
-	while(n < 100){
-	    set_freq(freq, hcc, snc, forced_mono, 0, 0);
-	    read(fd, radio, 5);
+	recordFd.open("timestamp.txt", std::ios_base::app);
+		while(n < 100){
+	    	set_freq(freq, hcc, snc, forced_mono, 0, 0);
+	    	read(fd, radio, 5);
             readyFlag = (radio[3] > 0x40)? 1:0;
             if(readyFlag){ // ready flag on
-		std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
-		auto duration = currentTime.time_since_epoch();
+				std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
+				auto duration = currentTime.time_since_epoch();
 
-		typedef std::chrono::duration<int, std::ratio_multiply<std::chrono::hours::period, std::ratio<8>
->::type> Days; /* UTC: +8:00 */
+				typedef std::chrono::duration<int, std::ratio_multiply<std::chrono::hours::period, std::ratio<8>>::type> Days; /* UTC: +8:00 */
 
-		Days days = std::chrono::duration_cast<Days>(duration);
-    		duration -= days;
-		auto hours = std::chrono::duration_cast<std::chrono::hours>(duration);
-    		duration -= hours;
-		auto minutes = std::chrono::duration_cast<std::chrono::minutes>(duration);
-		duration -= minutes;
-		auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration);
-		duration -= seconds;
-		auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(duration);
-		duration -= milliseconds;
-		auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(duration);
-		duration -= microseconds;
-		auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
+				Days days = std::chrono::duration_cast<Days>(duration);
+    			duration -= days;
+				auto hours = std::chrono::duration_cast<std::chrono::hours>(duration);
+    			duration -= hours;
+				auto minutes = std::chrono::duration_cast<std::chrono::minutes>(duration);
+				duration -= minutes;
+				auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration);
+				duration -= seconds;
+				auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(duration);
+				duration -= milliseconds;
+				auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(duration);
+				duration -= microseconds;
+				auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
 
-                stereo = radio[2] & 0x80;
-                level_adc = radio[3] >> 4;
-                // printf("%ld: %3.1f MHz %s \tSiganl Strength:%d/15\n", currentTime, freq, stereo? "stereo":"mono", level_adc);
-		recordFd << hours.count() << ":" << minutes.count() << ":" << seconds.count() << ":"
-	<< milliseconds.count() << ":" << microseconds.count() << ":" << nanoseconds.count() << std::endl;
-                // fprintf(recordFd, "%ld: %3.1f MHz %s \tSiganl Strength:%d/15\n", currentTime, freq, stereo? "stereo": "mono", level_adc);
-	    }
-	    n++;
+        		stereo = radio[2] & 0x80;
+        		level_adc = radio[3] >> 4;
+        		// printf("%ld: %3.1f MHz %s \tSiganl Strength:%d/15\n", currentTime, freq, stereo? "stereo":"mono", level_adc);
+				recordFd << hours.count() << ":" << minutes.count() << ":" << seconds.count() << ":" << milliseconds.count() << ":" << microseconds.count() << ":" << nanoseconds.count() << std::endl;
+		        // fprintf(recordFd, "%ld: %3.1f MHz %s \tSiganl Strength:%d/15\n", currentTime, freq, stereo? "stereo": "mono", level_adc);
+	    	}
+	    	n++;
         }
-	std::cout << "reset" << std::endl;
-	recordFd.close();
-	n = 0;
+		std::cout << "reset" << std::endl;
+		recordFd.close();
+		n = 0;
     } 
 
     close(fd);
