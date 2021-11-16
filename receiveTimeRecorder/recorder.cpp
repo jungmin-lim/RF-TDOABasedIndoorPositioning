@@ -27,6 +27,8 @@ int dID = 0x60; // i2c Channel the device is on
 unsigned char frequencyH = 0;
 unsigned char frequencyL = 0;
 unsigned int frequencyB;
+unsigned char write_radio[5] = {0};
+unsigned char read_radio[5] = {0};
 
 char *prog_name;
 
@@ -126,6 +128,20 @@ double get_freq()
 	freq = round(freq * 10.0)/10.0;
 
 	return freq;
+}
+
+void set()
+{	
+	write(fd, write_radio, 5);
+
+	// if (standby) return;
+
+	// save_freq(79.0);
+
+	if (wait_ready() < 0) {
+		fprintf(stderr, "Fail to tune!\n");
+		return;
+	}
 }
 
 void set_freq(double freq, int hcc, int snc, unsigned char forcd_mono, int mute, int standby)
@@ -337,11 +353,27 @@ int main(int argc, char* argv[]) {
     int hcc = HCC_DEFAULT, snc = SNC_DEFAULT;
     int forced_mono = FORCED_MONO;
     int readyFlag = 0;
+	int filewriteflag = 0;
     int n = 0;
-    unsigned char radio[5] = { 0 };
     unsigned char stereo;
     unsigned char level_adc;
     long currentTime;
+
+	frequencyB = 4 * (freq * 1000000 + 225000) / 32768; //calculating PLL word
+	frequencyH = frequencyB >> 8;
+	frequencyL = frequencyB & 0xFF;
+
+	write_radio[0] = frequencyH; //FREQUENCY H
+	if (0) write_radio[0] |= 0x80;
+	write_radio[1] = frequencyL; //FREQUENCY L
+	write_radio[2] = 0xB0; //3 byte (0xB0): high side LO injection is on,.
+	if (forced_mono) write_radio[2] |= 0x08;
+	write_radio[3] = 0x10; // Xtal is 32.768 kHz
+	if (freq < 87.5) write_radio[3] |= 0x20;
+	if (hcc) write_radio[3] |= 0x04;
+	if (snc) write_radio[3] |= 0x02;
+	if (0) write_radio[3] |= 0x40;
+	write_radio[4] = 0x40; // deemphasis is 75us in Korea and US
 
     prog_name = basename(argv[0]);
 
@@ -350,13 +382,17 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
+	set_freq(freq, hcc, snc, forced_mono, 0, 0);
     while(1){
-	recordFd.open("timestamp.txt", std::ios_base::app);
-		while(n < 100){
-	    	set_freq(freq, hcc, snc, forced_mono, 0, 0);
-	    	read(fd, radio, 5);
-            readyFlag = (radio[3] > 0x40)? 1:0;
+		recordFd.open("timestamp.txt", std::ios_base::app);
+		filewriteflag = 0;
+		while(!filewriteflag){
+			set();
+	    	read(fd, read_radio, 5);
+
+            readyFlag = (read_radio[3] > 0x40)? 1:0;
             if(readyFlag){ // ready flag on
+				filewriteflag = 1;
 				std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
 				auto duration = currentTime.time_since_epoch();
 
@@ -376,17 +412,12 @@ int main(int argc, char* argv[]) {
 				duration -= microseconds;
 				auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
 
-        		stereo = radio[2] & 0x80;
-        		level_adc = radio[3] >> 4;
-        		// printf("%ld: %3.1f MHz %s \tSiganl Strength:%d/15\n", currentTime, freq, stereo? "stereo":"mono", level_adc);
+        		stereo = read_radio[2] & 0x80;
+        		level_adc = read_radio[3] >> 4;
 				recordFd << hours.count() << ":" << minutes.count() << ":" << seconds.count() << ":" << milliseconds.count() << ":" << microseconds.count() << ":" << nanoseconds.count() << std::endl;
-		        // fprintf(recordFd, "%ld: %3.1f MHz %s \tSiganl Strength:%d/15\n", currentTime, freq, stereo? "stereo": "mono", level_adc);
 	    	}
-	    	n++;
         }
-		std::cout << "reset" << std::endl;
 		recordFd.close();
-		n = 0;
     } 
 
     close(fd);
