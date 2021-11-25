@@ -92,6 +92,7 @@ int main(int argc, char** argv)
         delete transmitter;
         transmitter = nullptr;
     };
+
     try {
         transmitter = new Transmitter();
         std::cout << "Broadcasting at " << frequency << " MHz with "
@@ -99,6 +100,21 @@ int main(int argc, char** argv)
 		recordFd.open("timestamp.txt", std::ios_base::app);
 		std::chrono::system_clock::time_point currentTime = std::chrono::system_clock::now();
 		auto duration = currentTime.time_since_epoch();
+        do {
+            std::string filename = argv[optind++];
+            if ((optind == argc) && loop) {
+                optind = filesOffset;
+            }
+            WaveReader reader(filename != "-" ? filename : std::string(), stop);
+            WaveHeader header = reader.GetHeader();
+
+            std::cout << "Playing: " << reader.GetFilename() << ", "
+                << header.sampleRate << " Hz, "
+                << header.bitsPerSample << " bits, "
+                << ((header.channels > 0x01) ? "stereo" : "mono") << std::endl;
+            transmitter->Transmit(reader, frequency, bandwidth, dmaChannel, optind < argc);
+        } while (!stop && (optind < argc));
+
 
 		typedef std::chrono::duration<int, std::ratio_multiply<std::chrono::hours::period, std::ratio<8>>::type> Days; /* UTC: +8:00 */
 
@@ -116,23 +132,11 @@ int main(int argc, char** argv)
 		duration -= microseconds;
 		auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration);
 
-		recordFd << hours.count() << ":" << minutes.count() << ":" << seconds.count() << ":"
-		<< milliseconds.count() << ":" << microseconds.count() << ":" << nanoseconds.count() << std::endl;
-
-        do {
-            std::string filename = argv[optind++];
-            if ((optind == argc) && loop) {
-                optind = filesOffset;
-            }
-            WaveReader reader(filename != "-" ? filename : std::string(), stop);
-            WaveHeader header = reader.GetHeader();
-
-            std::cout << "Playing: " << reader.GetFilename() << ", "
-                << header.sampleRate << " Hz, "
-                << header.bitsPerSample << " bits, "
-                << ((header.channels > 0x01) ? "stereo" : "mono") << std::endl;
-            transmitter->Transmit(reader, frequency, bandwidth, dmaChannel, optind < argc);
-        } while (!stop && (optind < argc));
+		auto result = seconds.count();
+		result = result * 1000 + milliseconds.count();
+		result = result * 1000 + microseconds.count();
+		result = result * 1000 + nanoseconds.count();
+		recordFd << result << std::endl;
 
 		recordFd.close();
 
@@ -142,6 +146,5 @@ int main(int argc, char** argv)
         return 1;
     }
     finally();
-
     return 0;
 }
